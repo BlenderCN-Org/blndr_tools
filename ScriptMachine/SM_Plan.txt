@@ -1,0 +1,26 @@
+1) Read in file with three types of lines
+	- Comments - line starts with "#"
+	- Bool diff - Line starts with "BD", object name,  x, y, z coordinate
+	- Target object move - Line starts with "TM", "R"otate or "M"ove, x, y, z (degrees for rotate or distance for move)
+2) Choose Target object
+3) Validate that file format is correct.
+4) Validate that tools exist.
+5) "Center" tool.
+6) Execute script.
+
+
+Sample Script
+------------
+# This will punch a saure hole, rotate 180deg and punch it again
+BD,'square_peg',5,0,-1
+TM,R,180,0,0
+BD,'square_peg',5,0,-1
+
+
+
+
+-------------
+https://blenderartists.org/t/a-script-to-import-a-csv-file-and-create-meshes-for-blender-2-5x-or-later/501410#post2866999
+https://blender.stackexchange.com/questions/2407/how-to-create-a-mesh-programmatically-without-bmesh/2416#2416
+https://blender.stackexchange.com/questions/31121/how-can-i-connect-a-set-of-vertices-to-make-a-3d-model-with-a-script
+https://blender.stackexchange.com/questions/34018/python-script-that-reads-text-file-containing-coordinates-and-creates-a-path-cur
