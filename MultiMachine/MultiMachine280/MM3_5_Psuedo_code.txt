@@ -1,0 +1,52 @@
+set:
+------
+target
+tool
+action
+move
+tool_x
+tool_y
+tool_z
+num_Steps
+first tooling step
+
+pre-move
+pm_x
+pm_y
+pm_z
+
+repeat_cnt
+
+--------
+get current Euler
+get current Loc
+set original and action eul and loc arrays
+set tool move rot and loc arrays
+set pre-move rot and loc arrays
+
+repeat for loop (0 -> 
+	if pre-move
+		do rotate
+			calc new act_eul = add act_eul to pre-move eul array
+			rotate_euler = act_eul
+		or do slide
+			calc new act_loc = add act_loc to pre-move loc array
+			location = act_loc
+	endif
+
+	steps for loop
+		tooling rotate_euler = act_eul
+		tooling slide location = act_loc
+		do diff or union
+
+		set next tooling rotate
+			calc new act_eul = add act_eul to pre-move eul array
+		or set next tooling slide
+			calc new act_loc = add act_loc to pre-move loc array
+	end steps loop
+
+end repeat loop
+
+
+
+	
