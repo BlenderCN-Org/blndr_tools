@@ -17,10 +17,10 @@
 # ##### END GPL LICENSE BLOCK #####
 #
 # 20190101 - Bpy2.8 upgrade
-#   - Went back to original non-F6 reset code and simpolified. A lot of web searching to find 2.8 equivelent for old 2.7 code.
+#   - Went back to original non-F6 reset code and simplified. A lot of web searching to find 2.8 equivalent for old 2.7 code.
+#   - Still in "Beta" mode noted by negative sub version.
 # ToDo:
 #   - Split out into "__init__.py" and separate modules.
-#   - Add Tetra code called from TM panel
 #   - Create new samples and video
 
 bl_info = {
@@ -28,7 +28,7 @@ bl_info = {
     "description": "Set of tools to: 1) Do param driven bool ops, 2) Create tetrahedron mesh objects",
     "author": "DSchwant",
     "blender": (2, 80, 0),
-    "version": (0,0,-2.1),
+    "version": (0,0,-2.6),
     "location": "View3D",
     "category" : "Object"
 }
@@ -46,7 +46,7 @@ from bpy.types import Operator
 from bpy.types import PropertyGroup
 
 import math
-from math import radians
+from math import radians, sqrt
 from mathutils import Vector, Euler
 
 #import os
@@ -84,10 +84,12 @@ Scene.RepeaterCnt = IntProperty(name='RepeaterCnt', min=1, max=1000, description
 Scene.ReturnToLoc =  BoolProperty(name='ReturnToLoc', default = True)
 
 ## TM ##
-
+Scene.sideLen = IntProperty(name='Length of Edge', min=1, max=300, description="Length of Edge.")
+Scene.faceOnly = BoolProperty(name='Face Only?', default= False, description="Do you want to generate only one of the 4 faces?")
+Scene.centerOnPlane = BoolProperty(name='Face Only?', default= False, description="Do you want to generate only one of the 4 faces?")
 
 ## MM PANEL ##
-class MM_PT_panel(Panel):
+class MB_PT_panel(Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_label = "MultiBool"
@@ -146,11 +148,21 @@ class TM_PT_panel(Panel):
 
     def draw(self, context):
         global custom_icons;
+        layout = self.layout
+        scene = context.scene
+        row = layout.row()
+        row.prop(scene, "sideLen", text="Length of Edge")
+        row = layout.row()
+        row.prop(scene, "faceOnly", text="Face Only?")
+        row = layout.row()
+        row.prop(scene, "centerOnPlane", text="Center on Plane?")
+        row = layout.row()
+        row.operator("mesh.make_tetrahedron", text="Add Tetrahedron")
 
 # OPERATORS #
-class MM_OT_execButton(Operator):
+class MB_OT_execButton(Operator):
     bl_idname = "tool.exec"
-    bl_label = "Make It So"
+    bl_label = "Execute MM sequence"
 
     def execute(self, context):
         vars = context.scene
@@ -225,19 +237,12 @@ class MM_OT_execButton(Operator):
             
         return {"FINISHED"}
 
-class MM_OT_resetButton(Operator):
+class MB_OT_resetButton(Operator):
     bl_idname = "reset.exec"
-    bl_label = "Reset values"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_label = "Reset MM values"
  
     def execute(self, context):
-
         vars = context.scene
-        
-        # vars.Target = ""
-        # vars.Tool = ""
-        # vars.MMAction = "None"
-        # vars.MMPreStep = "None"
         vars.MMToolXVal = 0
         vars.MMToolYVal = 0
         vars.MMToolZVal = 0
@@ -252,7 +257,30 @@ class MM_OT_resetButton(Operator):
             
         return {"FINISHED"}
 
-classes = (MM_PT_panel, MM_OT_execButton, MM_OT_resetButton, TM_PT_panel )
+class TM_OT_addButton(bpy.types.Operator):
+    bl_idname = "mesh.make_tetrahedron"
+    bl_label = "Add Tetrahedron"
+    
+    def execute(self, context):
+        vars = context.scene
+        rad1Val = vars.sideLen / sqrt(3)
+        if (vars.faceOnly == True):
+            depthVal = vars.sideLen / 12 * sqrt(6)
+            objName = "tetra_face_"
+            centerZ = (vars.sideLen / 12 * sqrt(6))/4
+        else:
+            depthVal = vars.sideLen / 3 * sqrt(6)
+            objName = "tetra_"
+            centerZ = vars.sideLen / 12 * sqrt(6)
+        bpy.ops.mesh.primitive_cone_add(vertices=3, radius1=rad1Val, radius2=0, depth=depthVal)
+        bpy.context.active_object.name = objName+str(vars.sideLen)
+        bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY')
+        if (vars.centerOnPlane == True):
+            bpy.context.active_object.location = Vector((0,0,centerZ))
+
+        return {"FINISHED"}
+
+classes = (MB_PT_panel, MB_OT_execButton, MB_OT_resetButton, TM_PT_panel, TM_OT_addButton )
 
 register, unregister = bpy.utils.register_classes_factory(classes)
     
