@@ -1,5 +1,5 @@
 # 20190101 - Bpy2.8 upgrade
-#
+# -
 # ToDo:
 # - clean up menu layout - box and divide like old
 # - make execute work? go back to original version without F6?
@@ -10,7 +10,7 @@ bl_info = {
     "description": "Set of tools to: 1) Do boolean differences or unions on an target using an object (tool) in a parameter driven pattern (rotate or slide). 2) Create Tetrahedron or Tetrahedron sections mesh objects to scene ",
     "author": "DSchwant",
     "blender": (2, 80, 0),
-    "version": (0,0,-1.10),
+    "version": (0,0,-1.11),
     "location": "View3D",
     "category" : "Object"
 }
@@ -172,11 +172,12 @@ class MM_OT_execButton(Operator):
                 target.location = slide_loc
                 bpy.ops.object.select_all(action='DESELECT')
                 target.select_set(True)
-                bpy.context.scene.objects.active = target
-                
+                #bpy.context.scene.objects.active = target
+                                
                 if (i >= vars.StartSteps): # Execute tool action at this step
                     bpy.ops.object.modifier_add(type='BOOLEAN')
                     mod = target.modifiers
+                    #print('mod:', mod) #-> mod: <bpy_collection[0], ObjectModifiers>
                     mod[0].name = "MMTool"
                     if (vars.MMAction == 'Diff'):
                         # print('diff: ',rot_eul, slide_loc)
