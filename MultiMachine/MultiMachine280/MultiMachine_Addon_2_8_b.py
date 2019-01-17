@@ -1,41 +1,59 @@
+# ##### BEGIN GPL LICENSE BLOCK #####
+#
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software Foundation,
+#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+#
+# ##### END GPL LICENSE BLOCK #####
+#
 # 20190101 - Bpy2.8 upgrade
-# -
+#   - Went back to original non-F6 reset code and simpolified. A lot of web searching to find 2.8 equivelent for old 2.7 code.
 # ToDo:
-# - clean up menu layout - box and divide like old
-# - make execute work? go back to original version without F6?
-# - Add Tetra code
+#   - Split out into "__init__.py" and separate modules.
+#   - Add Tetra code called from TM panel
+#   - Create new samples and video
 
 bl_info = {
     "name" : "Multi_Machine_280",
-    "description": "Set of tools to: 1) Do boolean differences or unions on an target using an object (tool) in a parameter driven pattern (rotate or slide). 2) Create Tetrahedron or Tetrahedron sections mesh objects to scene ",
+    "description": "Set of tools to: 1) Do param driven bool ops, 2) Create tetrahedron mesh objects",
     "author": "DSchwant",
     "blender": (2, 80, 0),
-    "version": (0,0,-1.11),
+    "version": (0,0,-2.1),
     "location": "View3D",
     "category" : "Object"
 }
 
-# LOAD MODUL #    
 import bpy
 
 from bpy import *
 from bpy.props import *
 from bpy.props import EnumProperty, IntProperty, FloatProperty, BoolProperty, StringProperty
 
-from bpy.types import WindowManager
 from bpy.types import Scene
 from bpy.types import Panel
 from bpy.types import Menu
 from bpy.types import Operator
 from bpy.types import PropertyGroup
-from bpy.types import AddonPreferences
 
 import math
 from math import radians
 from mathutils import Vector, Euler
-import os
 
-## Interface objects and properties
+#import os
+#os.system("cls")
+
+## Interface objects and properties ##
+## MM ##
 bpy.types.Scene.Target = PointerProperty(type=bpy.types.Object)
 bpy.types.Scene.Tool = PointerProperty(type=bpy.types.Object)
 Scene.MMAction = EnumProperty(items=(('Diff', "Diff", "Do Boolean Difference"),
@@ -53,8 +71,6 @@ Scene.MMToolYVal = FloatProperty(name='MMToolYVal', default = 0, min=-100000, ma
 Scene.MMToolZVal = FloatProperty(name='MMToolZVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Z axis.")
 Scene.NumSteps = IntProperty(name='Number of Steps', min=1, max=10000, description="Number tooling steps to take.")
 Scene.StartSteps = IntProperty(name='Step to start tooling', min=0, max=10000, description="The step at which to start tooling (current location is zero).")
-
-
 Scene.MMPreStep = EnumProperty(items=(('None', "None", "No Pre-step"),
                     ('Slide', "Slide", "Slide the target on the axis"),
                     ('Rotate', "Rotate", "Rotate the target on the axis")),
@@ -64,17 +80,17 @@ Scene.MMPreStep = EnumProperty(items=(('None', "None", "No Pre-step"),
 Scene.MMPreStepXVal = FloatProperty(name='MMPreStepXVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on X axis in pre-step.")
 Scene.MMPreStepYVal = FloatProperty(name='MMPreStepYVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Y axis in pre-step..")
 Scene.MMPreStepZVal = FloatProperty(name='MMPreStepZVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Z axis in pre-step..")
-
 Scene.RepeaterCnt = IntProperty(name='RepeaterCnt', min=1, max=1000, description="Number of times to repeat the pre-step and tooling sequence.", default = 1)
-
 Scene.ReturnToLoc =  BoolProperty(name='ReturnToLoc', default = True)
 
-# PANEL #
+## TM ##
+
+
+## MM PANEL ##
 class MM_PT_panel(Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_label = "MultiBool"
-    ##bl_idname = "VIEW_3D_TOOLS_Multi_Machine_v3_r280"
     bl_category = "MM"
     bl_context = "objectmode"
 
@@ -117,25 +133,35 @@ class MM_PT_panel(Panel):
         row = layout.row()
         row.prop(scene, "ReturnToLoc", text="Return To Start")
         row = layout.row()
+        row.operator("reset.exec", text="Reset")    
         row.operator("tool.exec", text="Execute")
 
-# OPERATOR #
+## TM PANEL ##
+class TM_PT_panel(Panel):
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_label = "Tetra Maker"
+    bl_category = "MM"
+    bl_context = "objectmode"
+
+    def draw(self, context):
+        global custom_icons;
+
+# OPERATORS #
 class MM_OT_execButton(Operator):
     bl_idname = "tool.exec"
     bl_label = "Make It So"
-    #bl_options = {'REGISTER', 'UNDO'} 
 
     def execute(self, context):
-        os.system("cls")
         vars = context.scene
         target = bpy.data.objects[vars.Target.name]
         tool = bpy.data.objects[vars.Tool.name]
         orig_Euler = target.rotation_euler
         orig_Location = target.location
-        print('target: ', target)
-        print('tool: ', tool)
-        print(orig_Euler)
-        print(orig_Location)
+        # print('target: ', target)
+        # print('tool: ', tool)
+        # print(orig_Euler)
+        # print(orig_Location)
         return2_eul = rot_eul = [orig_Euler[0],orig_Euler[1],orig_Euler[2]]
         return2_loc = slide_loc = [orig_Location[0],orig_Location[1],orig_Location[2]]
         toolRotRads = [radians(vars.MMToolXVal),radians(vars.MMToolYVal),radians(vars.MMToolZVal)]
@@ -172,7 +198,7 @@ class MM_OT_execButton(Operator):
                 target.location = slide_loc
                 bpy.ops.object.select_all(action='DESELECT')
                 target.select_set(True)
-                #bpy.context.scene.objects.active = target
+                context.view_layer.objects.active = target
                                 
                 if (i >= vars.StartSteps): # Execute tool action at this step
                     bpy.ops.object.modifier_add(type='BOOLEAN')
@@ -193,49 +219,40 @@ class MM_OT_execButton(Operator):
             r += 1
             
         if (vars.ReturnToLoc == True):
-            print('Return!!!: ', return2_eul, return2_loc)
+            #print('Return!!!: ', return2_eul, return2_loc)
             target.rotation_euler = return2_eul
             target.location = return2_loc
             
-        if self.bpSP == '':
-            print('Done')
-        else:
-            print("Don't Make Cuts from %s!" % self.bpSP)
         return {"FINISHED"}
 
-
-# RESET #
 class MM_OT_resetButton(Operator):
     bl_idname = "reset.exec"
     bl_label = "Reset values"
     bl_options = {'REGISTER', 'UNDO'}
  
-    bpSPRS : StringProperty()
-
     def execute(self, context):
 
-        resetVars.Target = ""
-        resetVars.Tool = ""
-        resetVars.MMAction = "None"
-        resetVars.MMPreStep = "None"
-        resetVars.MMToolXVal = 0
-        resetVars.MMToolYVal = 0
-        resetVars.MMToolZVal = 0
-        resetVars.NumSteps = 0
-        resetVars.StartSteps = 0
-        resetVars.MMPreStepXVal = 0
-        resetVars.MMPreStepYVal = 0
-        resetVars.MMPreStepZVal = 0
-        resetVars.RepeaterCnt = 0
-        resetVars.ReturnToLoc = True
+        vars = context.scene
+        
+        # vars.Target = ""
+        # vars.Tool = ""
+        # vars.MMAction = "None"
+        # vars.MMPreStep = "None"
+        vars.MMToolXVal = 0
+        vars.MMToolYVal = 0
+        vars.MMToolZVal = 0
+        vars.NumSteps = 0
+        vars.StartSteps = 0
+        vars.MMPreStep = 'None'
+        vars.MMPreStepXVal = 0
+        vars.MMPreStepYVal = 0
+        vars.MMPreStepZVal = 0
+        vars.RepeaterCnt = 0
+        vars.ReturnToLoc = True
             
-        if self.bpSPRS == '':
-            print('Done')
-        else:
-            print("Don't Make Cuts from %s!" % self.bpSPRS)
         return {"FINISHED"}
 
-classes = ( MM_PT_panel, MM_OT_execButton, MM_OT_resetButton )
+classes = (MM_PT_panel, MM_OT_execButton, MM_OT_resetButton, TM_PT_panel )
 
 register, unregister = bpy.utils.register_classes_factory(classes)
     

@@ -1,4 +1,0 @@
-https://youtu.be/ylggq0eFN5A - 2,8 py add panel to 3d view
-
-https://github.com/jayanam/fast-carve/tree/fast-carve-2-8 - sample addon to use as base?
-
