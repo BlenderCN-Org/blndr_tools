@@ -1,227 +1,139 @@
-# ##### BEGIN GPL LICENSE BLOCK #####
+# 20190101 - Bpy2.8 upgrade
 #
-#  This program is free software; you can redistribute it and/or
-#  modify it under the terms of the GNU General Public License
-#  as published by the Free Software Foundation; either version 2
-#  of the License, or (at your option) any later version.
-#
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#
-#  You should have received a copy of the GNU General Public License
-#  along with this program; if not, write to the Free Software Foundation,
-#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# ##### END GPL LICENSE BLOCK #####
-# 20181130 - Bpy2.8 upgrade
-#           > Added new "blender" value to bl_info
-#           > Change class names per standards
-#           > Changed register and unregister use register_classes_factory
-#           > Changed bl_region_type = 'UI'
-#           > Changed properties to ":" fields
+# ToDo:
+# - clean up menu layout - box and divide like old
+# - make execute work? go back to original version without F6?
+# - Add Tetra code
 
 bl_info = {
-    "name": "Multi_Machine_280",
+    "name" : "Multi_Machine_280",
+    "description": "Set of tools to: 1) Do boolean differences or unions on an target using an object (tool) in a parameter driven pattern (rotate or slide). 2) Create Tetrahedron or Tetrahedron sections mesh objects to scene ",
     "author": "DSchwant",
-    "version": (0,0,2),
     "blender": (2, 80, 0),
-    "description": "Does boolean differences or unions on an target using an object (tool) in a parameter driven pattern (rotate or slide).",
-    "location": "View3D > Tool Shelf > MultiMachine",
-    "category": "Object"}
-    
+    "version": (0,0,-1.10),
+    "location": "View3D",
+    "category" : "Object"
+}
 
 # LOAD MODUL #    
 import bpy
+
 from bpy import *
 from bpy.props import *
+from bpy.props import EnumProperty, IntProperty, FloatProperty, BoolProperty, StringProperty
+
 from bpy.types import WindowManager
 from bpy.types import Scene
 from bpy.types import Panel
+from bpy.types import Menu
 from bpy.types import Operator
 from bpy.types import PropertyGroup
-from bpy.props import EnumProperty, IntProperty, FloatProperty, BoolProperty, StringProperty
+from bpy.types import AddonPreferences
 
 import math
 from math import radians
 from mathutils import Vector, Euler
 import os
 
+## Interface objects and properties
+bpy.types.Scene.Target = PointerProperty(type=bpy.types.Object)
+bpy.types.Scene.Tool = PointerProperty(type=bpy.types.Object)
+Scene.MMAction = EnumProperty(items=(('Diff', "Diff", "Do Boolean Difference"),
+                    ('Union', "Union", "Do Boolean Union")),						
+                name="Should the tool boolean diff or boolean union?",
+                default = 'Diff',
+                description="Action for the MultiBool Machine.")
+Scene.MMMove = EnumProperty(items=(('Slide', "Slide", "Slide the target on the axis"),
+                    ('Rotate', "Rotate", "Rotate the target on the axis")),
+                name="Movement for the tooling",
+                default = 'Rotate',
+                description="What action should happen in the machining sequence.")
+Scene.MMToolXVal = FloatProperty(name='MMToolXVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on X axis.")
+Scene.MMToolYVal = FloatProperty(name='MMToolYVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Y axis.")
+Scene.MMToolZVal = FloatProperty(name='MMToolZVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Z axis.")
+Scene.NumSteps = IntProperty(name='Number of Steps', min=1, max=10000, description="Number tooling steps to take.")
+Scene.StartSteps = IntProperty(name='Step to start tooling', min=0, max=10000, description="The step at which to start tooling (current location is zero).")
+
+
+Scene.MMPreStep = EnumProperty(items=(('None', "None", "No Pre-step"),
+                    ('Slide', "Slide", "Slide the target on the axis"),
+                    ('Rotate', "Rotate", "Rotate the target on the axis")),
+                name="MMPreStep",
+                default = 'None',
+                description="Movement for the Pre-step (done once before each tooling step sequence).")
+Scene.MMPreStepXVal = FloatProperty(name='MMPreStepXVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on X axis in pre-step.")
+Scene.MMPreStepYVal = FloatProperty(name='MMPreStepYVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Y axis in pre-step..")
+Scene.MMPreStepZVal = FloatProperty(name='MMPreStepZVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Z axis in pre-step..")
+
+Scene.RepeaterCnt = IntProperty(name='RepeaterCnt', min=1, max=1000, description="Number of times to repeat the pre-step and tooling sequence.", default = 1)
+
+Scene.ReturnToLoc =  BoolProperty(name='ReturnToLoc', default = True)
+
 # PANEL #
 class MM_PT_panel(Panel):
-    bl_label = "Multi Machine"
-    bl_idname = "VIEW_3D_TOOLS_Multi_Machine_v3_r280"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
+    bl_label = "MultiBool"
+    ##bl_idname = "VIEW_3D_TOOLS_Multi_Machine_v3_r280"
     bl_category = "MM"
     bl_context = "objectmode"
 
     def draw(self, context):
+        global custom_icons;
+
         layout = self.layout
-
-        tp_props = context.window_manager.tp_props_multibool 
-
-        box = layout.box().column(1) 
-       
-        row = box.column(1)
-        row.prop_search(tp_props, "Target", bpy.data, "objects",icon="TRIA_DOWN")
-        row.prop_search(tp_props, "Tool", bpy.data, "objects",icon="TRIA_DOWN")
+        scene = context.scene
         
-        row.separator()         
-       
-        row.prop(tp_props, "MMAction", text="Action")      
-        row.prop(tp_props, "MMMove", text="Move")      
-
-        row.separator() 
+        row = layout.row()
+        layout.prop_search(scene, "Target", scene, "objects")
+        row = layout.row()
+        row.prop_search(scene, "Tool", scene, "objects")
+        row = layout.row()
+        row.prop(scene, "MMAction", text="Action")
+        row = layout.row()
+        row.prop(scene, "MMMove", text="Move")
+        row = layout.row()
+        row.prop(scene, "MMToolXVal", text="X")
+        row = layout.row()
+        row.prop(scene, "MMToolYVal", text="Y")
+        row = layout.row()
+        row.prop(scene, "MMToolZVal", text="Z")
+        row = layout.row()
+        row.prop(scene, "NumSteps", text="Num. Steps")
+        row = layout.row()
+        row.prop(scene, "StartSteps", text="Start at Step")
         
-        row.prop(tp_props, "MMToolXVal", text="X")
-        row.prop(tp_props, "MMToolYVal", text="Y")
-        row.prop(tp_props, "MMToolZVal", text="Z")
-       
-        row.separator() 
-
-        row.prop(tp_props, "NumSteps", text="Num. Steps")
-        row.prop(tp_props, "StartSteps", text="Start at Step")
-
-        box.separator() 
-        
-        box = layout.box().column(1) 
-       
-        row = box.column(1)
-        row.prop(tp_props, "MMPreStep", text="Pre-Move")
-        
-        row.separator()         
-        
-        row.prop(tp_props, "MMPreStepXVal", text="X")
-        row.prop(tp_props, "MMPreStepYVal", text="Y")
-        row.prop(tp_props, "MMPreStepZVal", text="Z")
-        
-        box.separator() 
-
-        box = layout.box().column(1) 
-       
-        row = box.column(1)
-        row.prop(tp_props, "RepeaterCnt", text="Repeat")
-        row.separator() 
-        row.prop(tp_props, "ReturnToLoc", text="ReturnToLoc")
-
-        row.separator() 
-        
-        row = box.row(1)        
-        row.operator("reset.exec", text="Reset")       
-        row.operator("tool.exec", text="Execute")
+        row = layout.row()
+        row.prop(scene, "MMPreStep", text="Pre-Move")
+        row = layout.row()
+        row.prop(scene, "MMPreStepXVal", text="X")
+        row = layout.row()
+        row.prop(scene, "MMPreStepYVal", text="Y")
+        row = layout.row()
+        row.prop(scene, "MMPreStepZVal", text="Z")
       
-        box.separator() 
+        row = layout.row()
+        row.prop(scene, "RepeaterCnt", text="Sequence Repeat")
+        row = layout.row()
+        row.prop(scene, "ReturnToLoc", text="Return To Start")
+        row = layout.row()
+        row.operator("tool.exec", text="Execute")
 
 # OPERATOR #
 class MM_OT_execButton(Operator):
-    """Make Multi Diff or Union""" 
     bl_idname = "tool.exec"
-    bl_label = "Make Diff or Union"
-    bl_options = {'REGISTER', 'UNDO'} 
-
-    bpSP : StringProperty()    
-    Target : StringProperty()
-    Tool : StringProperty()
-    
-    MMAction : EnumProperty(items=(('None', "None", "No tooling"),
-                        ('Diff', "Diff", "Do Boolean Difference"),
-                        ('Union', "Union", "Do Boolean Union")),                        
-                    name="MMAction",
-                    default = 'Diff',
-                    description="Action for the Multi Machine.")
-    MMMove : EnumProperty(items=(('Slide', "Slide", "Slide the target on the axis"),
-                        ('Rotate', "Rotate", "Rotate the target on the axis")),
-                    name="MMMove",
-                    default = 'Rotate',
-                    description="What action should happen in the machining sequence.")
-    MMToolXVal : FloatProperty(name='MMToolXVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on X axis.")
-    MMToolYVal : FloatProperty(name='MMToolYVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Y axis.")
-    MMToolZVal : FloatProperty(name='MMToolZVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Z axis.")
-    NumSteps : IntProperty(name='NumSteps', min=1, max=10000, description="Number tooling steps to take.")
-    StartSteps : IntProperty(name='StartSteps', min=0, max=10000, description="The step at which to start tooling (current location is zero).")
-    MMPreStep : EnumProperty(items=(('None', "None", "No Pre-step"),
-                        ('Slide', "Slide", "Slide the target on the axis"),
-                        ('Rotate', "Rotate", "Rotate the target on the axis")),
-                    name="MMPreStep",
-                    default = 'None',
-                    description="Movement for the Pre-step (done once before each tooling sequence).")
-    MMPreStepXVal : FloatProperty(name='MMPreStepXVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on X axis in pre-step.")
-    MMPreStepYVal : FloatProperty(name='MMPreStepYVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Y axis in pre-step..")
-    MMPreStepZVal : FloatProperty(name='MMPreStepZVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Z axis in pre-step..")
-    RepeaterCnt : IntProperty(name='RepeaterCnt', min=1, max=1000, description="Number of times to repeat the pre-step and tooling sequence.", default = 1)
-   
-    ReturnToLoc : BoolProperty(name='ReturnToLoc', default = True)
-
-    # DRAW REDO LAST PROPS [F6] # 
-    def draw(self, context):
-        layout = self.layout
-
-        box = layout.box().column(1) 
-       
-        row = box.column(1)
-        row.prop_search(self, "Target", bpy.data, "objects",icon="TRIA_DOWN")
-        row.prop_search(self, "Tool", bpy.data, "objects",icon="TRIA_DOWN")
-        
-        row.separator()         
-       
-        row.prop(self, "MMAction", text="Action")      
-        row.prop(self, "MMMove", text="Move")      
-
-        row.separator() 
-        
-        row.prop(self, "MMToolXVal", text="X")
-        row.prop(self, "MMToolYVal", text="Y")
-        row.prop(self, "MMToolZVal", text="Z")
-       
-        row.separator() 
-
-        row.prop(self, "NumSteps", text="Num. Steps")
-        row.prop(self, "StartSteps", text="Start at Step")
-
-        box.separator() 
-        
-        box = layout.box().column(1) 
-       
-        row = box.column(1)
-        row.prop(self, "MMPreStep", text="Pre-Move")
-        
-        row.separator()         
-        
-        row.prop(self, "MMPreStepXVal", text="X")
-        row.prop(self, "MMPreStepYVal", text="Y")
-        row.prop(self, "MMPreStepZVal", text="Z")
-        
-        box.separator() 
-
-        box = layout.box().column(1) 
-       
-        row = box.column()
-        row.prop(self, "RepeaterCnt", text="Repeat")
-        row.prop(self, "ReturnToLoc", text="ReturnToLoc")
-      
-        box.separator() 
-
-
-
-    # load panel settings #
-    def invoke(self, context, event):        
-        settings_load(self)
-        return self.execute(context)
+    bl_label = "Make It So"
+    #bl_options = {'REGISTER', 'UNDO'} 
 
     def execute(self, context):
-        # write panel settings #
-        settings_write(self) 
-  
         os.system("cls")
-        vars = self
-        #vars = context.scene
-        target = bpy.data.objects[vars.Target]
-        tool = bpy.data.objects[vars.Tool]
+        vars = context.scene
+        target = bpy.data.objects[vars.Target.name]
+        tool = bpy.data.objects[vars.Tool.name]
         orig_Euler = target.rotation_euler
         orig_Location = target.location
-        print('RTL: ', vars.ReturnToLoc)
+        print('target: ', target)
+        print('tool: ', tool)
         print(orig_Euler)
         print(orig_Location)
         return2_eul = rot_eul = [orig_Euler[0],orig_Euler[1],orig_Euler[2]]
@@ -259,7 +171,7 @@ class MM_OT_execButton(Operator):
                 target.rotation_euler = rot_eul 
                 target.location = slide_loc
                 bpy.ops.object.select_all(action='DESELECT')
-                target.select = True
+                target.select_set(True)
                 bpy.context.scene.objects.active = target
                 
                 if (i >= vars.StartSteps): # Execute tool action at this step
@@ -301,9 +213,6 @@ class MM_OT_resetButton(Operator):
 
     def execute(self, context):
 
-        tp_props = context.window_manager.tp_props_multibool         
-        resetVars = tp_props
-
         resetVars.Target = ""
         resetVars.Tool = ""
         resetVars.MMAction = "None"
@@ -325,69 +234,9 @@ class MM_OT_resetButton(Operator):
             print("Don't Make Cuts from %s!" % self.bpSPRS)
         return {"FINISHED"}
 
-class MM_PG_VIEW3D_TP_Multi_Boolean_Props(PropertyGroup):
-    
-    bpSPRS : StringProperty()
-
-    bpSP : StringProperty()   
-    Target : StringProperty()
-    Tool : StringProperty()
-    
-    MMAction : EnumProperty(items=(('None', "None", "No tooling"),
-                        ('Diff', "Diff", "Do Boolean Difference"),
-                        ('Union', "Union", "Do Boolean Union")),                        
-                    name="MMAction",
-                    default = 'Diff',
-                    description="Action for the Multi Machine.")
-
-    MMMove : EnumProperty(items=(('Slide', "Slide", "Slide the target on the axis"),
-                        ('Rotate', "Rotate", "Rotate the target on the axis")),
-                    name="MMMove",
-                    default = 'Rotate',
-                    description="What action should happen in the machining sequence.")
-
-    MMToolXVal : FloatProperty(name='MMToolXVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on X axis.")
-    MMToolYVal : FloatProperty(name='MMToolYVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Y axis.")
-    MMToolZVal : FloatProperty(name='MMToolZVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Z axis.")
-
-    NumSteps : IntProperty(name='NumSteps', min=1, max=10000, description="Number tooling steps to take.")
-    StartSteps : IntProperty(name='StartSteps', min=0, max=10000, description="The step at which to start tooling (current location is zero).")
-
-    MMPreStep : EnumProperty(items=(('None', "None", "No Pre-step"),
-                        ('Slide', "Slide", "Slide the target on the axis"),
-                        ('Rotate', "Rotate", "Rotate the target on the axis")),
-                    name="MMPreStep",
-                    default = 'None',
-                    description="Movement for the Pre-step (done once before each tooling sequence).")
-
-    MMPreStepXVal : FloatProperty(name='MMPreStepXVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on X axis in pre-step.")
-    MMPreStepYVal : FloatProperty(name='MMPreStepYVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Y axis in pre-step..")
-    MMPreStepZVal : FloatProperty(name='MMPreStepZVal', default = 0, min=-100000, max=100000, precision=5, description="Number of degrees or units to move target on Z axis in pre-step..")
-
-    RepeaterCnt : IntProperty(name='RepeaterCnt', min=1, max=1000, description="Number of times to repeat the pre-step and tooling sequence.", default = 1)
-    ReturnToLoc : BoolProperty(name='ReturnToLoc', default = True)
-
-# LOAD PANEL SETTINGS #
-def settings_load(self):
-    tp_props = bpy.context.window_manager.tp_props_multibool
-    tool = self.name.split()[0].lower()
-    keys = self.as_keywords().keys()
-    for key in keys:
-        setattr(self, key, getattr(tp_props, key))
-
-# STORE PANEL SETTINGS #
-def settings_write(self):
-    tp_props = bpy.context.window_manager.tp_props_multibool
-    tool = self.name.split()[0].lower()
-    keys = self.as_keywords().keys()
-    for key in keys:
-        setattr(tp_props, key, getattr(self, key))
-
-classes = ( MM_PT_panel, MM_OT_execButton, MM_OT_resetButton, MM_PG_VIEW3D_TP_Multi_Boolean_Props )
+classes = ( MM_PT_panel, MM_OT_execButton, MM_OT_resetButton )
 
 register, unregister = bpy.utils.register_classes_factory(classes)
-
+    
 if __name__ == "__main__":
     register()
-
-
