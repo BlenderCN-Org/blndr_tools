@@ -20,8 +20,19 @@
 #   - Went back to original non-F6 reset code and simplified. A lot of web searching to find 2.8 equivalent for old 2.7 code.
 #   - Still in "Beta" mode noted by negative sub version.
 # ToDo:
+#   - add dissolve/clean and print prep shortcut panel
 #   - Split out into "__init__.py" and separate modules.
 #   - Create new samples and video
+# ----------------------------
+# remove doubles (w r) - bpy.ops.mesh.remove_doubles()
+# triangulate faces (ctrl-t) - bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY', ngon_method='BEAUTY')
+# make normals consistant (ctrl-n) - bpy.ops.mesh.normals_make_consistent(inside=False)
+# -------------------------------------------------------
+# bpy.ops.mesh.dissolve_mode(use_verts=True)
+# bpy.ops.mesh.select_all(action='TOGGLE')
+# bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY', ngon_method='BEAUTY')
+# bpy.ops.mesh.select_all(action='TOGGLE')
+# ----------------------------
 
 bl_info = {
     "name" : "Multi_Machine_280",
